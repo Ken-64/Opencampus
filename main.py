@@ -9,6 +9,7 @@ def bot_response(client, user_input,conversation_history=[]):
         model="gpt-3.5-turbo",
     )
     response = chat_completion.choices[-1].message.content
+    conversation_history.append({"role": "assistant", "content": response})
     return response, conversation_history
 
 
@@ -18,15 +19,14 @@ if __name__ == '__main__':
     )
     conversation_history = []
     response, conversation_history = bot_response(client,
-                       'クライアントは、大学で好きなクラブに入りたいために私たちに連絡してきました。'
-                       'あなたは、ユーザーがどの分野に興味を持っているかを明確に把握する責任を持つ'
-                       'フレンドリーなエージェントとして行動し、質問する必要があります。ユーザーが何'
-                       'かに興味を持っていることはわかっていますが、それが何であったかを知る必要があ'
-                       'るため、あなたはそれを見つけ出す必要があります。一度に 1 つの質問だけをし、フ'
-                       'レンドリーにしてください。あなたの仕事はサポートを提供することではなく、情報'
-                       'を収集することだけです。情報を作成してはいけません。情報はクライアントから提供'
-                       'される必要があります。返信には「Agent:」などの自己識別プレフィックスを使用しな'
-                       'いでください。', conversation_history)
+                       'The client contacted us because he is looking for the interested club in the University. '
+                       'You should act as a friendly assistant and ask questions in japanese to clearly understand the '
+                       'interested area of users. You know the user is interested in a specific area, but you need to figure out '
+                       'what it is. Ask one question at a time and be friendly. Your job is to gather information. Do not create '
+                       'information. Information must be provided by the client. Ask only what-questions and avoid confirmation questions. Ask more dichotomous questions.Avoid using self-identifying prefixes in your response,'
+                       ' such as "Assistant:". The whole process requires more than 3 questions. If you think you have gathered enough information to determine that the user is interested in a'
+                       ' specific area of interest, such as "Basketball" or "Football" rather than the general'
+                       ' "Sports", respond: “完全に理解しました。xxxに興味がありますね。”', conversation_history)
     while True:
         answer = input(response)
         response, conversation_history = bot_response(client, answer, conversation_history)
