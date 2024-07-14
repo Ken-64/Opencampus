@@ -5,68 +5,28 @@ import json
 from openai import OpenAI
 
 
-def upload_file_once(client, file_path):
-    message_file = client.files.create(
-        file=open(file_path, "rb"), purpose="assistants"
-    )
-    file_id_data = {"file_id": message_file.id}
-    with open("../データ/file_id.json", "w") as f:
-        json.dump(file_id_data, f)
+def get_genre_list(genre_key, path):
+    with open(path, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+    if genre_key == 2:
+        column_values = list(dict.fromkeys(entry['ラベル２'] for entry in data if entry['ラベル２'] is not None))
+    else:
+        column_values = list(dict.fromkeys(entry['ラベル1'] for entry in data if entry['ラベル1'] is not None))
+    return column_values
 
 
-def search_clubs(client,conversation_history):
-    my_assistant = client.beta.assistants.create(
-        description='The client contacted us because he is looking for the interested club in the University.',
-        instructions='You should search for and pick up at least 3 clubs that are suitable for users based on the requirements provided by users,'
-                     'like the areas of interest and specific preferences. Then provide detailed information in Japanese.'
-                     'Notice that do not show the source ID',
-        name="Club Recommending Tutor",
-        tools=[{"type": "file_search"}],
+def genre_chat(client, prompt, conversation_history):
+    conversation_history.append({"role": "system", "content": prompt})
+    chat_completion = client.chat.completions.create(
+        messages=conversation_history,
         model="gpt-3.5-turbo",
     )
-
-    vector_store = client.beta.vector_stores.create(name="Club data")
-
-    assistant = client.beta.assistants.update(
-        assistant_id=my_assistant.id,
-        tool_resources={"file_search": {"vector_store_ids": [vector_store.id]}},
-    )
-
-    with open("../データ/file_id.json", "r") as f:
-        file_id_data = json.load(f)
-    file_id = file_id_data["file_id"]
-
-    thread = client.beta.threads.create(
-        messages=[
-            {
-                "role": "user",
-                "content": str(conversation_history),
-                "attachments": [
-                    {"file_id": file_id, "tools": [{"type": "file_search"}]}
-                ],
-            }
-        ]
-    )
-
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id, assistant_id=assistant.id
-    )
-
-    messages = list(client.beta.threads.messages.list(thread_id=thread.id, run_id=run.id))
-
-    message_content = messages[0].content[0].text
-    annotations = message_content.annotations
-    citations = []
-    for index, annotation in enumerate(annotations):
-        message_content.value = message_content.value.replace(annotation.text, f"[{index}]")
-        if file_citation := getattr(annotation, "file_citation", None):
-            cited_file = client.files.retrieve(file_citation.file_id)
-            citations.append(f"[{index}] {cited_file.filename}")
-
-    return message_content.value
+    response = chat_completion.choices[-1].message.content
+    conversation_history.pop()
+    return response
 
 
-def bot_response(client, user_input, conversation_history=[]):
+def opening_chat(client, user_input, conversation_history=[]):
     conversation_history.append({"role": "user", "content": user_input})
     chat_completion = client.chat.completions.create(
         messages=conversation_history,
@@ -82,19 +42,37 @@ if __name__ == '__main__':
         api_key='sk-proj-FxWWRvSKKJIBL3pvHTvuT3BlbkFJdoJBDfFdsw0wKTABA5M9',
     )
 
-    # upload_file_once(client, '../データ/サークルデータ.json')
+    genre1_list = get_genre_list(1, "../データ/サークルデータ.json")
+    genre2_list = get_genre_list(2, "../データ/サークルデータ.json")
     conversation_history = []
     initial_prompt = ('The client contacted us because he is looking for the interested club in the University. '
                       'You should act as a friendly assistant and ask questions in only japanese to clearly understand the '
-                      'interested area of users. You know the user is interested in a specific area, but you need to figure out '
-                      'what it is. Ask one question at a time and be friendly. Your job is to gather information. Do not create '
-                      'information. Information must be provided by the client. Ask only what-questions and avoid confirmation questions. Ask more dichotomous questions.Avoid using self-identifying prefixes in your response,'
-                      ' such as "Assistant:". The whole process requires more than 5 questions. If you think you have gathered enough information to determine that the user is interested in a'
-                      ' specific area of interest, such as "Basketball" or "Football" rather than the general'
-                      ' "Sports", respond: “完全に理解しました。xxxに興味がありますね。”')
-    model_response, conversation_history = bot_response(client, initial_prompt, conversation_history)
-    while "完全に理解しました" not in model_response:
+                       'interested area of users based on the list. You know the user is interested in a specific area, but you need to figure out '
+                       'what it is. You should aim to discover one hobby rather than multiple ones. Your questions should ask for details about the users hobbies and try to get the user to express their opinions. '
+                       'Ask one question at a time and be friendly. Please prioritize responding to the  question using what '
+                       'or which over the confirmation question. For example, focus more on answering questions that ask for details '
+                       'or specifics rather than simply confirming interest. Ask more dichotomous questions. Avoid showing all the genres to user. Avoid using self-identifying prefixes in your response,'
+                       ' such as "Assistant:".')
+    first_question = ('興味のある分野はありますか？スポーツ、文学、芸術など。')
+    genre1_prompt = ('The above is the requirement of a student for a university club. '
+                     'You should select the 2 most relevant genres from the club genre list I will give below. '
+                     'Do not reply with any extra content, just reply with the name of the genre. '
+                     '\nClub Genre List: ' + str(genre1_list))
+    genre2_prompt = ('The above is the requirement of a student for a university club. '
+                     'You should select the 3 most relevant genres from the club genre list I will give below. '
+                     'Do not reply with any extra content, just reply with the name of the genre. '
+                     '\nClub Genre List: ' + str(genre2_list))
+
+    user_answer = input(first_question)
+    conversation_history.append({"role": "system", "content": initial_prompt})
+    conversation_history.append({"role": "assistant", "content": first_question})
+    model_response, conversation_history = opening_chat(client, user_answer, conversation_history)
+    for _ in range(4):
         user_answer = input(model_response)
-        model_response, conversation_history = bot_response(client, user_answer, conversation_history)
+        model_response, conversation_history = opening_chat(client, user_answer, conversation_history)
     conversation_history.pop(0)
-    print(search_clubs(client,conversation_history))
+
+    genre1 = genre_chat(client, genre1_prompt, conversation_history)
+    genre2 = genre_chat(client, genre2_prompt, conversation_history)
+    print(genre1)
+    print(genre2)
