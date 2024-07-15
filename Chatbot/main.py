@@ -9,7 +9,6 @@ def initialization():
     client = OpenAI(
         api_key='sk-proj-FxWWRvSKKJIBL3pvHTvuT3BlbkFJdoJBDfFdsw0wKTABA5M9',
     )
-    file_path = "../データ/サークルデータ.json"
     genre_list = get_genre_list(file_path)
     initial_prompt = ('The client contacted us because he is looking for the interested club in the University. '
                       'You should act as a friendly assistant and ask questions in only japanese to clearly understand the '
@@ -22,11 +21,31 @@ def initialization():
     first_question = ('興味のある分野はありますか？スポーツ、文学、芸術など。')
 
     genre_prompt = ('The above is the requirement of a student for a university club. '
-                     'You should select the 3 most relevant genres from the club genre list I will give below. '
-                     'Do not reply with any extra content, just reply with the name of the genre. '
-                     '\nClub Genre List: ' + str(genre_list))
+                    'You should select the 3 most relevant genres from the club genre list I will give below. '
+                    'Do not reply with any extra content, just reply with the name of the genre. Split them by "@".'
+                    '\nClub Genre List: ' + str(genre_list))
 
-    return client, file_path, initial_prompt, first_question, genre_prompt
+    return client, initial_prompt, first_question, genre_prompt
+
+
+def transform_json(path):
+    json_file_path = '../データ/データ7.15.json'
+    df = pd.read_csv(path)
+    df.replace("", float("NaN"), inplace=True)
+    df.dropna(how='all', inplace=True)
+    json_result = df.to_json(orient='records', force_ascii=False)
+    with open(json_file_path, 'w', encoding='utf-8') as json_file:
+        json_file.write(json_result)
+    return json_file_path
+
+
+def get_clubs_info(clubs, club_list):
+    club_info = []
+    for tar_club in clubs:
+        for club in club_list:
+            if club['サークル'] == tar_club:
+                club_info.append(club)
+    return club_info
 
 
 def get_genre_list(path):
@@ -36,11 +55,25 @@ def get_genre_list(path):
     return column_values
 
 
+def description_chat(client, clubs_info, conversation_history):
+    club_prompt = ('The above is the requirement of a student for a university club. '
+                   'You should use natural words to describe clubs and explain why they are suitable for the user based on the club information I will give below. '
+                   '\nClub Information: ' + str(clubs_info))
+    conversation_history.append({"role": "system", "content": club_prompt})
+    chat_completion = client.chat.completions.create(
+        messages=conversation_history,
+        model="gpt-3.5-turbo",
+    )
+    response = chat_completion.choices[-1].message.content
+    conversation_history.pop()
+    return response
+
+
 def club_chat(client, club_list, conversation_history):
     club_prompt = ('The above is the requirement of a student for a university club. '
-                     'You should select the 3 most relevant clubs from the club list I will give below. '
-                     'Do not reply with any extra content, just reply with the name of the club. '
-                     '\nClub List: ' + str(club_list))
+                   'You should select the 3 most relevant clubs from the club list I will give below. '
+                   'Do not reply with any extra content, just reply with the name of the club. Split them by "@" '
+                   '\nClub List: ' + str(club_list))
     conversation_history.append({"role": "system", "content": club_prompt})
     chat_completion = client.chat.completions.create(
         messages=conversation_history,
@@ -76,7 +109,7 @@ def opening_chat(client, prompt, conversation_history=[]):
 def get_club_list(genre, path):
     club_list = []
     seen_items = set()
-    genres = genre.split("、")
+    genres = genre.split("@")
     with open(path, 'r', encoding='utf-8') as file:
         data = json.load(file)
 
@@ -91,7 +124,8 @@ def get_club_list(genre, path):
 
 
 if __name__ == '__main__':
-    client, file_path, initial_prompt, first_question, genre_prompt = initialization()
+    file_path = transform_json("../データ/データ7.15.csv")
+    client, initial_prompt, first_question, genre_prompt = initialization()
     conversation_history = []
 
     user_answer = input(first_question)
@@ -105,5 +139,6 @@ if __name__ == '__main__':
 
     genre = genre_chat(client, genre_prompt, conversation_history)
     club_list = get_club_list(genre, file_path)
-    clubs = club_chat(client, club_list, conversation_history)
-    print(clubs)
+    clubs = club_chat(client, club_list, conversation_history).split("@")
+    clubs_info = get_clubs_info(clubs, club_list)
+    print(description_chat(client, clubs_info, conversation_history))
