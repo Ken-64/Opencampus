@@ -1,9 +1,9 @@
 import os
 import pandas as pd
 import csv
+import streamlit as st
 import json
 from openai import OpenAI
-
 
 def initialization():
     client = OpenAI(
@@ -24,9 +24,11 @@ def initialization():
                     'You should select the 3 most relevant genres from the club genre list I will give below. '
                     'Do not reply with any extra content, just reply with the name of the genre. Split them by "@".'
                     '\nClub Genre List: ' + str(genre_list))
+    conversation_history = []
+    conversation_history.append({"role": "system", "content": initial_prompt})
+    conversation_history.append({"role": "assistant", "content": first_question})
 
-    return client, initial_prompt, first_question, genre_prompt
-
+    return client, conversation_history, first_question, genre_prompt
 
 def transform_json(path):
     json_file_path = '../データ/データ7.15.json'
@@ -125,20 +127,35 @@ def get_club_list(genre, path):
 
 if __name__ == '__main__':
     file_path = transform_json("../データ/データ7.15.csv")
-    client, initial_prompt, first_question, genre_prompt = initialization()
-    conversation_history = []
+    client, conversation_history, first_question, genre_prompt = initialization()
+    if 'step' not in st.session_state:
+        st.session_state.step = 0
+    if st.session_state.step == 0:
+        st.write(first_question)
+        user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
 
-    user_answer = input(first_question)
-    conversation_history.append({"role": "system", "content": initial_prompt})
-    conversation_history.append({"role": "assistant", "content": first_question})
-    model_response, conversation_history = opening_chat(client, user_answer, conversation_history)
-    for _ in range(4):
-        user_answer = input(model_response)
-        model_response, conversation_history = opening_chat(client, user_answer, conversation_history)
-    conversation_history.pop(0)
+        if st.button("Submit", key=f"submit_{st.session_state.step}"):
 
-    genre = genre_chat(client, genre_prompt, conversation_history)
+            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer, conversation_history)
+            st.session_state.step += 1
+            st.rerun()
+        else:
+            st.stop()
+
+    #st.write(st.session_state.model_response)
+    if st.session_state.step < 4:
+        st.write(st.session_state.model_response)
+        user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
+        if st.button("Submit", key=f"submit_{st.session_state.step}"):
+            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer, conversation_history)
+            st.session_state.step += 1
+            st.rerun()
+        else:
+            st.stop()
+    st.session_state.conversation_history.pop(0)
+
+    genre = genre_chat(client, genre_prompt, st.session_state.conversation_history)
     club_list = get_club_list(genre, file_path)
-    clubs = club_chat(client, club_list, conversation_history).split("@")
+    clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
     clubs_info = get_clubs_info(clubs, club_list)
-    print(description_chat(client, clubs_info, conversation_history))
+    st.write(description_chat(client, clubs_info, st.session_state.conversation_history))
