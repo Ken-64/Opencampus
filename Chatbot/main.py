@@ -5,6 +5,7 @@ import streamlit as st
 import json
 from openai import OpenAI
 
+
 def initialization():
     client = OpenAI(
         api_key='sk-proj-FxWWRvSKKJIBL3pvHTvuT3BlbkFJdoJBDfFdsw0wKTABA5M9',
@@ -29,6 +30,7 @@ def initialization():
     conversation_history.append({"role": "assistant", "content": first_question})
 
     return client, conversation_history, first_question, genre_prompt
+
 
 def transform_json(path):
     json_file_path = '../データ/データ7.15.json'
@@ -97,7 +99,7 @@ def genre_chat(client, prompt, conversation_history):
     return response
 
 
-def opening_chat(client, prompt, conversation_history=[]):
+def opening_chat(client, prompt, conversation_history):
     conversation_history.append({"role": "user", "content": prompt})
     chat_completion = client.chat.completions.create(
         messages=conversation_history,
@@ -129,33 +131,44 @@ if __name__ == '__main__':
     file_path = transform_json("../データ/データ7.15.csv")
     client, conversation_history, first_question, genre_prompt = initialization()
     if 'step' not in st.session_state:
+        st.session_state.conversation_history = conversation_history
         st.session_state.step = 0
+
+    if st.session_state.step == 4:
+        st.session_state.conversation_history.pop(0)
+        st.session_state.conversation_history.pop()
+
+    for conversation in st.session_state.conversation_history:
+        if conversation['role'] == 'assistant':
+            st.write(conversation['content'])
+        elif conversation['role'] == 'user':
+            reply = conversation['content']
+            st.markdown(f'<div style="text-align: right">{reply}</div>', unsafe_allow_html=True)
+
     if st.session_state.step == 0:
-        st.write(first_question)
         user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
-
         if st.button("Submit", key=f"submit_{st.session_state.step}"):
-
-            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer, conversation_history)
+            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
+                                                                                                  st.session_state.conversation_history)
             st.session_state.step += 1
             st.rerun()
         else:
             st.stop()
 
-    #st.write(st.session_state.model_response)
-    if st.session_state.step < 4:
-        st.write(st.session_state.model_response)
+
+    elif st.session_state.step < 4:
         user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
         if st.button("Submit", key=f"submit_{st.session_state.step}"):
-            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer, conversation_history)
+            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
+                                                                                                  st.session_state.conversation_history)
             st.session_state.step += 1
             st.rerun()
         else:
             st.stop()
-    st.session_state.conversation_history.pop(0)
+    elif st.session_state.step == 4:
 
-    genre = genre_chat(client, genre_prompt, st.session_state.conversation_history)
-    club_list = get_club_list(genre, file_path)
-    clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
-    clubs_info = get_clubs_info(clubs, club_list)
-    st.write(description_chat(client, clubs_info, st.session_state.conversation_history))
+        genre = genre_chat(client, genre_prompt, st.session_state.conversation_history)
+        club_list = get_club_list(genre, file_path)
+        clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
+        clubs_info = get_clubs_info(clubs, club_list)
+        st.write(description_chat(client, clubs_info, st.session_state.conversation_history))
