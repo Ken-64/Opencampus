@@ -1,10 +1,8 @@
-import os
 import pandas as pd
-import csv
 import streamlit as st
 import json
 from openai import OpenAI
-
+from streamlit_javascript import st_javascript
 
 def initialization():
     client = OpenAI(
@@ -22,7 +20,7 @@ def initialization():
     first_question = ('興味のある分野はありますか？スポーツ、文学、芸術など。')
 
     genre_prompt = ('The above is the requirement of a student for a university club. '
-                    'You should select the 3 most relevant genres from the club genre list I will give below. '
+                    'You should select the 1-3 most relevant genres from the club genre list I will give below. '
                     'Do not reply with any extra content, just reply with the name of the genre. Split them by "@".'
                     '\nClub Genre List: ' + str(genre_list))
     conversation_history = []
@@ -47,7 +45,7 @@ def get_clubs_info(clubs, club_list):
     club_info = []
     for tar_club in clubs:
         for club in club_list:
-            if club['サークル'] == tar_club:
+            if club['サークル'] == tar_club or club['サークル'] == f'{tar_club}\n':
                 club_info.append(club)
     return club_info
 
@@ -60,8 +58,10 @@ def get_genre_list(path):
 
 
 def description_chat(client, clubs_info, conversation_history):
-    club_prompt = ('The above is the requirement of a student for a university club. '
-                   'You should use natural words to describe clubs and explain why they are suitable for the user based on the club information I will give below. '
+    club_prompt = ('The above is the requirement of a student for a university club. And I will give one club below'
+                   'You should describe the selected club and explain why they are suitable. Note that you should use japanese.'
+                   'Note that it should be less than 150 words in one paragraph. Note that you should use natural words. '
+                   'Avoid using sentence like "選ばれたクラブは「xxx」です"'
                    '\nClub Information: ' + str(clubs_info))
     conversation_history.append({"role": "system", "content": club_prompt})
     chat_completion = client.chat.completions.create(
@@ -145,6 +145,10 @@ if __name__ == '__main__':
             reply = conversation['content']
             st.markdown(f'<div style="text-align: right">{reply}</div>', unsafe_allow_html=True)
 
+    st_javascript("""
+                window.scrollTo(0, document.body.scrollHeight);
+            """)
+
     if st.session_state.step == 0:
         user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
         if st.button("Submit", key=f"submit_{st.session_state.step}"):
@@ -171,4 +175,11 @@ if __name__ == '__main__':
         club_list = get_club_list(genre, file_path)
         clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
         clubs_info = get_clubs_info(clubs, club_list)
-        st.write(description_chat(client, clubs_info, st.session_state.conversation_history))
+        descriptions = []
+        for each_club in clubs_info:
+            descriptions.append(description_chat(client, each_club, st.session_state.conversation_history))
+        st.write(str(clubs))
+        for each_description in descriptions:
+            st.write(str(each_description)+"\n")
+
+
