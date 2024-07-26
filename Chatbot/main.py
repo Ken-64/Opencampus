@@ -1,9 +1,8 @@
-import os
 import pandas as pd
-import csv
+import streamlit as st
 import json
 from openai import OpenAI
-
+from streamlit_javascript import st_javascript
 
 def initialization():
     client = OpenAI(
@@ -21,11 +20,14 @@ def initialization():
     first_question = ('興味のある分野はありますか？スポーツ、文学、芸術など。')
 
     genre_prompt = ('The above is the requirement of a student for a university club. '
-                    'You should select the 3 most relevant genres from the club genre list I will give below. '
+                    'You should select the 1-3 most relevant genres from the club genre list I will give below. '
                     'Do not reply with any extra content, just reply with the name of the genre. Split them by "@".'
                     '\nClub Genre List: ' + str(genre_list))
+    conversation_history = []
+    conversation_history.append({"role": "system", "content": initial_prompt})
+    conversation_history.append({"role": "assistant", "content": first_question})
 
-    return client, initial_prompt, first_question, genre_prompt
+    return client, conversation_history, first_question, genre_prompt
 
 
 def transform_json(path):
@@ -43,7 +45,7 @@ def get_clubs_info(clubs, club_list):
     club_info = []
     for tar_club in clubs:
         for club in club_list:
-            if club['サークル'] == tar_club:
+            if club['サークル'] == tar_club or club['サークル'] == f'{tar_club}\n':
                 club_info.append(club)
     return club_info
 
@@ -56,8 +58,10 @@ def get_genre_list(path):
 
 
 def description_chat(client, clubs_info, conversation_history):
-    club_prompt = ('The above is the requirement of a student for a university club. '
-                   'You should use natural words to describe clubs and explain why they are suitable for the user based on the club information I will give below. '
+    club_prompt = ('The above is the requirement of a student for a university club. And I will give one club below'
+                   'You should describe the selected club and explain why they are suitable. Note that you should use japanese.'
+                   'Note that it should be less than 150 words in one paragraph. Note that you should use natural words. '
+                   'Avoid using sentence like "選ばれたクラブは「xxx」です"'
                    '\nClub Information: ' + str(clubs_info))
     conversation_history.append({"role": "system", "content": club_prompt})
     chat_completion = client.chat.completions.create(
@@ -95,7 +99,7 @@ def genre_chat(client, prompt, conversation_history):
     return response
 
 
-def opening_chat(client, prompt, conversation_history=[]):
+def opening_chat(client, prompt, conversation_history):
     conversation_history.append({"role": "user", "content": prompt})
     chat_completion = client.chat.completions.create(
         messages=conversation_history,
@@ -125,20 +129,57 @@ def get_club_list(genre, path):
 
 if __name__ == '__main__':
     file_path = transform_json("../データ/データ7.15.csv")
-    client, initial_prompt, first_question, genre_prompt = initialization()
-    conversation_history = []
+    client, conversation_history, first_question, genre_prompt = initialization()
+    if 'step' not in st.session_state:
+        st.session_state.conversation_history = conversation_history
+        st.session_state.step = 0
 
-    user_answer = input(first_question)
-    conversation_history.append({"role": "system", "content": initial_prompt})
-    conversation_history.append({"role": "assistant", "content": first_question})
-    model_response, conversation_history = opening_chat(client, user_answer, conversation_history)
-    for _ in range(4):
-        user_answer = input(model_response)
-        model_response, conversation_history = opening_chat(client, user_answer, conversation_history)
-    conversation_history.pop(0)
+    if st.session_state.step == 4:
+        st.session_state.conversation_history.pop(0)
+        st.session_state.conversation_history.pop()
 
-    genre = genre_chat(client, genre_prompt, conversation_history)
-    club_list = get_club_list(genre, file_path)
-    clubs = club_chat(client, club_list, conversation_history).split("@")
-    clubs_info = get_clubs_info(clubs, club_list)
-    print(description_chat(client, clubs_info, conversation_history))
+    for conversation in st.session_state.conversation_history:
+        if conversation['role'] == 'assistant':
+            st.write(conversation['content'])
+        elif conversation['role'] == 'user':
+            reply = conversation['content']
+            st.markdown(f'<div style="text-align: right">{reply}</div>', unsafe_allow_html=True)
+
+    st_javascript("""
+                window.scrollTo(0, document.body.scrollHeight);
+            """)
+
+    if st.session_state.step == 0:
+        user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
+        if st.button("Submit", key=f"submit_{st.session_state.step}"):
+            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
+                                                                                                  st.session_state.conversation_history)
+            st.session_state.step += 1
+            st.rerun()
+        else:
+            st.stop()
+
+
+    elif st.session_state.step < 4:
+        user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
+        if st.button("Submit", key=f"submit_{st.session_state.step}"):
+            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
+                                                                                                  st.session_state.conversation_history)
+            st.session_state.step += 1
+            st.rerun()
+        else:
+            st.stop()
+    elif st.session_state.step == 4:
+
+        genre = genre_chat(client, genre_prompt, st.session_state.conversation_history)
+        club_list = get_club_list(genre, file_path)
+        clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
+        clubs_info = get_clubs_info(clubs, club_list)
+        descriptions = []
+        for each_club in clubs_info:
+            descriptions.append(description_chat(client, each_club, st.session_state.conversation_history))
+        st.write(str(clubs))
+        for each_description in descriptions:
+            st.write(str(each_description)+"\n")
+
+
