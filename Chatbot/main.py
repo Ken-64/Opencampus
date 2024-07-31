@@ -130,6 +130,15 @@ def get_club_list(genre, path):
 if __name__ == '__main__':
     file_path = transform_json("../データ/データ7.15.csv")
     client, conversation_history, first_question, genre_prompt = initialization()
+    st.title("LLMに聞いてみよう。あなたにお勧めのサークルは！？")
+    scroll_script = """
+        <script>
+            window.onload = function() {
+                window.scrollTo(0, document.body.scrollHeight);
+            };
+        </script>
+        """
+
     if 'step' not in st.session_state:
         st.session_state.conversation_history = conversation_history
         st.session_state.step = 0
@@ -139,19 +148,19 @@ if __name__ == '__main__':
         st.session_state.conversation_history.pop()
 
     for conversation in st.session_state.conversation_history:
+        reply = conversation['content']
         if conversation['role'] == 'assistant':
-            st.write(conversation['content'])
+            st.write("\n")
+            st.markdown(f'<div font-size: 14px;">{reply}</div>', unsafe_allow_html=True)
         elif conversation['role'] == 'user':
-            reply = conversation['content']
-            st.markdown(f'<div style="text-align: right">{reply}</div>', unsafe_allow_html=True)
+            st.write("\n")
+            st.markdown(f'<div style="text-align: right; font-size: 16px;">{reply}</div>', unsafe_allow_html=True)
 
-    st_javascript("""
-                window.scrollTo(0, document.body.scrollHeight);
-            """)
 
     if st.session_state.step == 0:
-        user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
-        if st.button("Submit", key=f"submit_{st.session_state.step}"):
+        st.write("\n")
+        user_answer = st.text_input("答え:", key=f"input_{st.session_state.step}")
+        if st.button("提出する", key=f"submit_{st.session_state.step}"):
             st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
                                                                                                   st.session_state.conversation_history)
             st.session_state.step += 1
@@ -160,9 +169,11 @@ if __name__ == '__main__':
             st.stop()
 
 
+
     elif st.session_state.step < 4:
-        user_answer = st.text_input("Your answer:", key=f"input_{st.session_state.step}")
-        if st.button("Submit", key=f"submit_{st.session_state.step}"):
+        st.write("\n")
+        user_answer = st.text_input("答え:", key=f"input_{st.session_state.step}")
+        if st.button("提出する", key=f"submit_{st.session_state.step}"):
             st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
                                                                                                   st.session_state.conversation_history)
             st.session_state.step += 1
@@ -176,10 +187,14 @@ if __name__ == '__main__':
         clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
         clubs_info = get_clubs_info(clubs, club_list)
         descriptions = []
+        st.write("\n")
         for each_club in clubs_info:
             descriptions.append(description_chat(client, each_club, st.session_state.conversation_history))
-        st.write(str(clubs))
         for each_description in descriptions:
-            st.write(str(each_description)+"\n")
+            for club in clubs:
+                each_description = each_description.replace(club, f"<span style='font-size:20px;'>**{club}**</span>")
+            st.markdown(each_description+"\n", unsafe_allow_html=True)
+
+
 
 
