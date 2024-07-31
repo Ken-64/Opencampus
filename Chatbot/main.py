@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import json
 from openai import OpenAI
-from streamlit_javascript import st_javascript
+
 
 def initialization():
     client = OpenAI(
@@ -131,13 +131,8 @@ if __name__ == '__main__':
     file_path = transform_json("../データ/データ7.15.csv")
     client, conversation_history, first_question, genre_prompt = initialization()
     st.title("LLMに聞いてみよう。あなたにお勧めのサークルは！？")
-    scroll_script = """
-        <script>
-            window.onload = function() {
-                window.scrollTo(0, document.body.scrollHeight);
-            };
-        </script>
-        """
+    image_path1 = 'https://i.imgur.com/MNQoZSK.jpg'
+    image_path2 = 'https://i.imgur.com/o6oe2ra.png'
 
     if 'step' not in st.session_state:
         st.session_state.conversation_history = conversation_history
@@ -151,11 +146,21 @@ if __name__ == '__main__':
         reply = conversation['content']
         if conversation['role'] == 'assistant':
             st.write("\n")
-            st.markdown(f'<div font-size: 14px;">{reply}</div>', unsafe_allow_html=True)
+            st.markdown(f"""
+                            <div style="display: flex; align-items: center;"> 
+                                <img src="{image_path1}" style="width: 25px; margin-right: 10px;" />
+                                <div style="font-size: 16px;">{reply}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
         elif conversation['role'] == 'user':
             st.write("\n")
-            st.markdown(f'<div style="text-align: right; font-size: 16px;">{reply}</div>', unsafe_allow_html=True)
-
+            st.markdown(f"""
+                <div style="display: flex; justify-content: flex-end; align-items: center;"> 
+                    <div style="font-size: 16px;">{reply}</div>
+                    <span style="display: inline-block; width: 10px;"></span>
+                    <img src="{image_path2}" style="width: 20px; margin-right: 10px;" />
+                </div>
+            """, unsafe_allow_html=True)
 
     if st.session_state.step == 0:
         st.write("\n")
@@ -193,8 +198,4 @@ if __name__ == '__main__':
         for each_description in descriptions:
             for club in clubs:
                 each_description = each_description.replace(club, f"<span style='font-size:20px;'>**{club}**</span>")
-            st.markdown(each_description+"\n", unsafe_allow_html=True)
-
-
-
-
+            st.markdown(each_description + "\n", unsafe_allow_html=True)
