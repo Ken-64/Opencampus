@@ -138,10 +138,19 @@ if __name__ == '__main__':
         st.session_state.conversation_history = conversation_history
         st.session_state.step = 0
 
-    if st.session_state.step == 4:
+    if st.session_state.step == 3:
         st.session_state.conversation_history.pop(0)
         st.session_state.conversation_history.pop()
 
+    greeting = "こんにちは！僕はサークル活動をおすすめするチャットボット、クラブボットだよ！🎉<br><br>大学生活は勉強だけじゃなくて、クラブ活動も大" \
+               "事だよね。君がスポーツ好きでも、アートが得意でも、技術オタクでも、ピッタリのクラブを見つけるお手伝いをするよ！<br><br>さあ、この楽しいテストを始めよう。まず最初に教えてね——<br><br>"
+
+    st.markdown(f"""
+                                <div style="display: flex; align-items: center;"> 
+                                    <img src="{image_path1}" style="width: 25px; margin-right: 10px;" />
+                                    <div style="font-size: 16px;">{greeting}</div>
+                                </div>
+                            """, unsafe_allow_html=True)
     for conversation in st.session_state.conversation_history:
         reply = conversation['content']
         if conversation['role'] == 'assistant':
@@ -175,7 +184,7 @@ if __name__ == '__main__':
 
 
 
-    elif st.session_state.step < 4:
+    elif st.session_state.step < 3:
         st.write("\n")
         user_answer = st.text_input("答え:", key=f"input_{st.session_state.step}")
         if st.button("提出する", key=f"submit_{st.session_state.step}"):
@@ -185,7 +194,7 @@ if __name__ == '__main__':
             st.rerun()
         else:
             st.stop()
-    elif st.session_state.step == 4:
+    elif st.session_state.step == 3:
 
         genre = genre_chat(client, genre_prompt, st.session_state.conversation_history)
         club_list = get_club_list(genre, file_path)
