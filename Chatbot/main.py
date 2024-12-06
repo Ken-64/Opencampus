@@ -4,9 +4,10 @@ import json
 from openai import OpenAI
 
 
+
 def initialization():
     client = OpenAI(
-        api_key='sk-proj-FxWWRvSKKJIBL3pvHTvuT3BlbkFJdoJBDfFdsw0wKTABA5M9',
+        api_key='',
     )
     genre_list = get_genre_list(file_path)
     initial_prompt = ('The client contacted us because he is looking for the interested club in the University. '
@@ -126,43 +127,44 @@ def get_club_list(genre, path):
                         club_list.append(item)
     return club_list
 
-
-if __name__ == '__main__':
-    file_path = transform_json("../データ/データ7.15.csv")
-    client, conversation_history, first_question, genre_prompt = initialization()
-    st.title("LLMに聞いてみよう。あなたにお勧めのサークルは！？")
-    image_path1 = 'https://i.imgur.com/MNQoZSK.jpg'
-    image_path2 = 'https://i.imgur.com/o6oe2ra.png'
-
+def initialize_session(conversation_history):
+    """Initialize the Streamlit session state."""
     if 'step' not in st.session_state:
         st.session_state.conversation_history = conversation_history
         st.session_state.step = 0
 
-    if st.session_state.step == 3:
-        st.session_state.conversation_history.pop(0)
-        st.session_state.conversation_history.pop()
-
-    greeting = "こんにちは！僕はサークル活動をおすすめするチャットボット、クラブボットだよ！🎉<br><br>大学生活は勉強だけじゃなくて、クラブ活動も大" \
-               "事だよね。君がスポーツ好きでも、アートが得意でも、技術オタクでも、ピッタリのクラブを見つけるお手伝いをするよ！<br><br>さあ、この楽しいテストを始めよう。まず最初に教えてね——<br><br>"
-
+def render_greeting(image_path, greeting):
+    """Render the greeting message."""
     st.markdown(f"""
-                                <div style="display: flex; align-items: center;"> 
-                                    <img src="{image_path1}" style="width: 25px; margin-right: 10px;" />
-                                    <div style="font-size: 16px;">{greeting}</div>
-                                </div>
-                            """, unsafe_allow_html=True)
-    for conversation in st.session_state.conversation_history:
+        <div style="display: flex; align-items: center;"> 
+            <img src="{image_path}" style="width: 25px; margin-right: 10px;" />
+            <div style="font-size: 16px;">{greeting}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+def handle_user_input(client, step_key):
+    """Handle user input and update the conversation."""
+    user_answer = st.text_input("答え:", key=f"input_{step_key}")
+    if st.button("提出する", key=f"submit_{step_key}"):
+        st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
+                                                                                              st.session_state.conversation_history)
+        st.session_state.step += 1
+        st.rerun()
+    else:
+        st.stop()
+
+def render_conversation(conversation_history, image_path1, image_path2):
+    """Render the conversation history."""
+    for conversation in conversation_history:
         reply = conversation['content']
         if conversation['role'] == 'assistant':
-            st.write("\n")
             st.markdown(f"""
-                            <div style="display: flex; align-items: center;"> 
-                                <img src="{image_path1}" style="width: 25px; margin-right: 10px;" />
-                                <div style="font-size: 16px;">{reply}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                <div style="display: flex; align-items: center;"> 
+                    <img src="{image_path1}" style="width: 25px; margin-right: 10px;" />
+                    <div style="font-size: 16px;">{reply}</div>
+                </div>
+            """, unsafe_allow_html=True)
         elif conversation['role'] == 'user':
-            st.write("\n")
             st.markdown(f"""
                 <div style="display: flex; justify-content: flex-end; align-items: center;"> 
                     <div style="font-size: 16px;">{reply}</div>
@@ -171,40 +173,45 @@ if __name__ == '__main__':
                 </div>
             """, unsafe_allow_html=True)
 
+def process_final_step(client, genre_prompt, file_path):
+    """Handle the final step in the chat interaction."""
+    genre = genre_chat(client, genre_prompt, st.session_state.conversation_history)
+    club_list = get_club_list(genre, file_path)
+    clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
+    clubs_info = get_clubs_info(clubs, club_list)
+    descriptions = []
+    for each_club in clubs_info:
+        descriptions.append(description_chat(client, each_club, st.session_state.conversation_history))
+    for each_description in descriptions:
+        for club in clubs:
+            each_description = each_description.replace(club, f"<span style='font-size:20px;'>**{club}**</span>")
+        st.markdown(each_description + "\n", unsafe_allow_html=True)
+
+
+
+
+if __name__ == '__main__':
+    file_path = transform_json("../データ/データ7.15.csv")
+    client, conversation_history, first_question, genre_prompt = initialization()
+    st.title("LLMに聞いてみよう。あなたにお勧めのサークルは！？")
+    image_path1 = 'https://i.imgur.com/MNQoZSK.jpg'
+    image_path2 = 'https://i.imgur.com/o6oe2ra.png'
+
+    initialize_session(conversation_history)
+
+    if st.session_state.step == 3:
+        st.session_state.conversation_history.pop(0)
+        st.session_state.conversation_history.pop()
+
+    greeting = "こんにちは！僕はサークル活動をおすすめするチャットボット、クラブボットだよ！🎉<br><br>大学生活は勉強だけじゃなくて、クラブ活動も大" \
+               "事だよね。君がスポーツ好きでも、アートが得意でも、技術オタクでも、ピッタリのクラブを見つけるお手伝いをするよ！<br><br>さあ、この楽しいテストを始めよう。まず最初に教えてね——<br><br>"
+
+    render_greeting(image_path1, greeting)
+    render_conversation(st.session_state.conversation_history, image_path1, image_path2)
+
     if st.session_state.step == 0:
-        st.write("\n")
-        user_answer = st.text_input("答え:", key=f"input_{st.session_state.step}")
-        if st.button("提出する", key=f"submit_{st.session_state.step}"):
-            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
-                                                                                                  st.session_state.conversation_history)
-            st.session_state.step += 1
-            st.rerun()
-        else:
-            st.stop()
-
-
-
+        handle_user_input(client, st.session_state.step)
     elif st.session_state.step < 3:
-        st.write("\n")
-        user_answer = st.text_input("答え:", key=f"input_{st.session_state.step}")
-        if st.button("提出する", key=f"submit_{st.session_state.step}"):
-            st.session_state.model_response, st.session_state.conversation_history = opening_chat(client, user_answer,
-                                                                                                  st.session_state.conversation_history)
-            st.session_state.step += 1
-            st.rerun()
-        else:
-            st.stop()
+        handle_user_input(client, st.session_state.step)
     elif st.session_state.step == 3:
-
-        genre = genre_chat(client, genre_prompt, st.session_state.conversation_history)
-        club_list = get_club_list(genre, file_path)
-        clubs = club_chat(client, club_list, st.session_state.conversation_history).split("@")
-        clubs_info = get_clubs_info(clubs, club_list)
-        descriptions = []
-        st.write("\n")
-        for each_club in clubs_info:
-            descriptions.append(description_chat(client, each_club, st.session_state.conversation_history))
-        for each_description in descriptions:
-            for club in clubs:
-                each_description = each_description.replace(club, f"<span style='font-size:20px;'>**{club}**</span>")
-            st.markdown(each_description + "\n", unsafe_allow_html=True)
+        process_final_step(client, genre_prompt, file_path)
